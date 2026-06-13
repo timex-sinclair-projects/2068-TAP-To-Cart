@@ -74,41 +74,81 @@ This is why everything in this tool revolves around `$8000` and multiples of 819
 
 ---
 
-## 2. How the 2068 recognizes a cartridge: the 8-byte ROS header
+## 2. How the 2068 recognizes a cartridge: the ROS header
 
 When you power on (or after `NEW`), the TS2068's startup routine switches in the
-DOCK bank and reads the **first 8 bytes at `$8000`** (32768). These bytes are the
-**ROS header** (ROS = "Rom Oriented Software", sometimes called the "ROS overhead
-bytes"). They tell the machine what kind of cartridge this is and how to run it.
+DOCK bank and reads the cartridge's **ROS header** (ROS = "Rom Oriented Software").
+This header tells the machine what kind of cartridge it is and how to run it.
+
+There are two kinds of ROS, with **different headers**:
+
+- **AROS** (*Application* ROS) — an **8-byte** header. The cartridge runs
+  *alongside* the normal BASIC operating system.
+- **LROS** (*Language* ROS) — a **4-byte** header. The cartridge *replaces* the
+  operating system and takes over the machine.
+
+**This tool produces BASIC AROS cartridges only** — that's what the vast majority
+of software needs (take a BASIC program off tape, make it a cartridge). LROS is
+covered below for completeness, but the tool does not generate it.
+
+### The AROS header (8 bytes)
+
+This is the header this tool writes, at the start of chunk 4 (`$8000`):
 
 | Byte | Address       | Meaning            | Values                                                                 |
 |------|---------------|--------------------|------------------------------------------------------------------------|
 | 0    | `$8000`/32768 | Language type      | `1` = BASIC (may also contain machine code) · `2` = machine code only  |
-| 1    | `$8001`/32769 | Cartridge type     | `1` = LROS · `2` = AROS                                                 |
+| 1    | `$8001`/32769 | Cartridge type     | `2` = AROS                                                              |
 | 2–3  | `$8002`/32770 | Start of program   | 2-byte address, little-endian (low byte first)                         |
 | 4    | `$8004`/32772 | Chunk specification | bitmap — see below                                                     |
 | 5    | `$8005`/32773 | Autostart          | `0` = no · `1` = yes                                                    |
 | 6–7  | `$8006`/32774 | Reserved bytes     | bytes reserved in the HOME bank for machine-code variables (usually 0) |
 
-### LROS vs AROS
+AROS comes in two flavors:
 
-- **LROS** (*Language* ROS) **replaces** the operating system. On boot the machine
-  reads byte 1, switches in the chunks named by byte 4, and *jumps* to the address
-  in bytes 2–3. From then on the cartridge is in charge. The Spectrum emulator
-  cartridge is a classic LROS.
+- **BASIC AROS** — a BASIC program stored in the DOCK. The machine pulls one
+  program line at a time out of the cartridge into a small buffer (the "AROS
+  buffer") in HOME chunk 3, switches HOME back in, and executes that line. Your
+  variables live in the HOME bank, so you get more room for data and near-instant
+  "loading." **This is what the tool builds** (`language type = 1`, `cartridge
+  type = 2`).
+- **Machine-code AROS** — machine code that gets copied out of the cartridge into
+  a working RAM configuration and run.
 
-- **AROS** (*Application* ROS) runs *alongside* BASIC. There are two flavors:
-  - **BASIC AROS** — a BASIC program stored in the DOCK. The machine pulls one
-    program line at a time out of the cartridge into a small buffer (the "AROS
-    buffer") in HOME chunk 3, switches HOME back in, and executes that line. Your
-    variables live in the HOME bank, so you get more room for data and near-instant
-    "loading."
-  - **Machine-code AROS** — machine code that gets copied out of the cartridge into
-    a working RAM configuration and run.
+### The LROS header (4 bytes)
 
-**This tool produces BASIC AROS cartridges** (`language type = 1`, `cartridge type
-= 2`). That is the common case: take a BASIC program off tape and make it a
-cartridge.
+An **LROS** is a *Language* ROS: because it replaces the built-in operating system,
+it doesn't need autostart or reserved-variable fields — on boot the machine simply
+switches in its chunks and **jumps to its start address**, handing over control
+completely. Its header is just 4 bytes:
+
+| Byte | Meaning             | Notes                                              |
+|------|---------------------|----------------------------------------------------|
+| 0    | LROS identifier     | `1` marks this as an LROS                           |
+| 1–2  | Start address       | little-endian; the machine jumps here on boot      |
+| 3    | Chunk specification | which chunks the LROS occupies (can include 0–1)   |
+
+Because an LROS can claim the low chunks (0–1, the `$0000`–`$3FFF` region the OS ROM
+normally fills), it can substitute an entirely different system. Creating an LROS is
+outside the scope of this tool, but two real cases are worth knowing:
+
+- **OS-64** (the 64-column OS) is a genuine LROS cartridge — it carries a proper
+  LROS header and the Timex boot sequence auto-runs it.
+
+- **Spectrum ROM cartridges are mostly *not* LROS.** Most simply contained the
+  **unmodified Spectrum ROM**, which has no LROS header at all. The Timex boot
+  sequence therefore ignores them, and you have to map the ROM in by hand with
+  `OUT 244,3` before it will run.
+
+  Bob Orrfelt worked out how to make a Spectrum ROM **auto-boot** by grafting a
+  working LROS header onto it (*Dock It*, Theory section, Example 1). The trick: he
+  pointed the LROS start address at an otherwise-unused Spectrum address (`$3870`)
+  and put code there that reproduces the Spectrum's reset and then jumps to its
+  normal initialization. On `RST 0` the Timex ROM runs, scans the DOCK for LROS
+  headers, finds this one, and hands control to the (modified) Spectrum ROM, which
+  carries on as if it had booted normally. (The OS-64 cartridge likely relies on the
+  same `RST 0` hand-off.) Timex never documented this clearly; it appears to have
+  been discovered by experimentation.
 
 ### The chunk specification byte (byte 4)
 
@@ -318,9 +358,9 @@ them in full if you want to build the real thing.
 ## Quick reference
 
 ```
-ROS header @ $8000 (8 bytes):
+AROS header @ $8000 (8 bytes)  <- this is what the tool writes:
   +0  language   1=BASIC(+mc)  2=machine code only
-  +1  type       1=LROS        2=AROS
+  +1  type       2=AROS
   +2  start addr (lo)          \ little-endian, e.g. $8008
   +3  start addr (hi)          /
   +4  chunk spec  0-bit=DOCK, 1-bit=HOME  ($EF/$CF/$8F/$0F for 8/16/24/32K)
@@ -328,6 +368,12 @@ ROS header @ $8000 (8 bytes):
   +6  reserved (lo)
   +7  reserved (hi)
 Program data starts at $8008. End marker byte = $80. Pad to 8K boundary.
+
+LROS header (4 bytes, replaces the OS — not produced by this tool):
+  +0  identifier  =1
+  +1  start addr (lo)  \ little-endian; machine jumps here on boot
+  +2  start addr (hi)  /
+  +3  chunk spec
 
 DCK header (9 bytes): [bank=0][chunk0..chunk7]  per chunk: 0=absent, 2=ROM
 ```

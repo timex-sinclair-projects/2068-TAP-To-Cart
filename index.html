@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TS2068 TAP &rarr; Cartridge Builder</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel2: #1f2331;
+    --ink: #e8eaf0;
+    --muted: #9aa3b5;
+    --line: #2c3142;
+    --accent: #4f9cff;
+    --accent2: #2b6fd6;
+    --ok: #36c47a;
+    --warn: #f0a020;
+    --err: #ff5d5d;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .rainbow { height: 5px; background: linear-gradient(90deg,#e23,#e83,#ee3,#3c5,#39c,#63c); }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 20px 60px; }
+  header h1 { margin: 18px 0 4px; font-size: 24px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 8px; color: var(--muted); }
+  header a { color: var(--accent); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; margin: 18px 0;
+  }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+  /* Drop zone */
+  #drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 34px 18px;
+    text-align: center; cursor: pointer; transition: .15s; background: var(--panel2);
+  }
+  #drop.over { border-color: var(--accent); background: #1b2333; }
+  #drop strong { color: var(--accent); }
+  #drop .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  input[type=file] { display: none; }
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr.disabled { opacity: .45; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .pill { font-family: var(--mono); font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+  .tag-auto { color: var(--ok); }
+  .addr-in { width: 86px; font-family: var(--mono); }
+  /* Forms */
+  label.field { display: block; margin: 0 0 14px; }
+  label.field .lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=number] {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 8px; padding: 7px 9px; font-family: var(--mono); font-size: 14px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 200px; }
+  .check { display: flex; align-items: center; gap: 9px; margin: 6px 0; }
+  .check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .check .desc { color: var(--muted); font-size: 13px; }
+  button {
+    background: var(--accent2); color: #fff; border: 0; border-radius: 9px;
+    padding: 11px 18px; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { background: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--line); color: var(--ink); }
+  button.ghost:hover { border-color: var(--accent); background: #1b2333; }
+  .downloads { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .hidden { display: none; }
+  .note { font-size: 13px; color: var(--muted); }
+  .msg { border-radius: 9px; padding: 10px 13px; margin: 10px 0 0; font-size: 14px; }
+  .msg.err { background: #2a1620; border: 1px solid #5a2030; color: #ffb3b3; }
+  .msg.warn { background: #2a2310; border: 1px solid #5a4a20; color: #ffd98a; }
+  .msg.ok { background: #122a1d; border: 1px solid #1f5a3a; color: #a9efc7; }
+  .summary { font-family: var(--mono); font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .summary b { color: var(--ink); }
+  code { font-family: var(--mono); background: var(--panel2); padding: 1px 5px; border-radius: 5px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 30px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="rainbow"></div>
+<div class="wrap">
+  <header>
+    <h1>TS2068 TAP &rarr; Cartridge Builder</h1>
+    <p>
+      Convert a Timex/Sinclair&nbsp;2068 <code>.TAP</code> file into a cartridge ROM
+      image (<code>.BIN</code> for EPROM burning) and a <code>.DCK</code> file for emulators.
+      Everything runs in your browser &mdash; no files are uploaded anywhere.
+    </p>
+    <p class="note">New to TS2068 cartridges? Read the
+      <a href="docs/Creating-TS2068-Cartridges.md">format guide</a>.</p>
+  </header>
+
+  <!-- 1. Upload -->
+  <div class="panel">
+    <div id="drop">
+      <div><strong>Choose a .TAP file</strong> or drag it here</div>
+      <div class="hint">Parsed locally in your browser</div>
+      <input type="file" id="file" accept=".tap,.TAP">
+    </div>
+    <div id="parseMsg"></div>
+  </div>
+
+  <!-- 2. Select contents -->
+  <div class="panel hidden" id="selectPanel">
+    <h2>Cartridge contents</h2>
+    <p class="note">
+      Choose one <b>BASIC program</b> to run from the cartridge. Optionally include
+      <b>CODE</b> blocks; each is placed at its load address (editable).
+    </p>
+    <table id="subTable">
+      <thead>
+        <tr>
+          <th style="width:64px">Program</th>
+          <th style="width:64px">Include</th>
+          <th>Name</th>
+          <th>Type</th>
+          <th class="num">Length</th>
+          <th class="num">Address</th>
+        </tr>
+      </thead>
+      <tbody id="subBody"></tbody>
+    </table>
+  </div>
+
+  <!-- 3. Options -->
+  <div class="panel hidden" id="optsPanel">
+    <h2>Header options</h2>
+    <div class="row">
+      <label class="field">
+        <span class="lbl">BASIC start address</span>
+        <input type="text" id="basStart" value="$8008" spellcheck="false">
+      </label>
+      <label class="field">
+        <span class="lbl">Reserved bytes (machine-code vars)</span>
+        <input type="text" id="reserved" value="0" spellcheck="false">
+      </label>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="autostart">
+      <label for="autostart">Autostart on power-up
+        <span class="desc" id="autoNote"></span></label>
+    </div>
+  </div>
+
+  <!-- 4. Build -->
+  <div class="panel hidden" id="buildPanel">
+    <div class="row" style="align-items:center">
+      <div style="flex: 0 0 auto">
+        <button id="buildBtn">Build cartridge</button>
+      </div>
+      <label class="field" style="margin:0">
+        <span class="lbl">Output name</span>
+        <input type="text" id="outName" spellcheck="false" style="width:100%">
+      </label>
+    </div>
+    <div id="buildMsg"></div>
+    <div id="result" class="hidden" style="margin-top:14px">
+      <div class="summary" id="summary"></div>
+      <div class="downloads" style="margin-top:12px">
+        <button class="ghost" id="dlBin">Download .BIN</button>
+        <button class="ghost" id="dlDck">Download .DCK</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Part of <a href="https://github.com/timex-sinclair-projects/2068-TAP-To-Cart">2068-TAP-To-Cart</a>.
+    Produces the same cartridge format as the command-line <code>tapToCart.py</code>.
+  </footer>
+</div>
+
+<script src="tapcart.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  let subfiles = [];
+  let lastBuild = null;
+  let baseName = 'cartridge';
+
+  // ---- Upload handling ----
+  const drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault(); drop.classList.remove('over');
+    if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) loadFile(fileInput.files[0]);
+  });
+
+  function loadFile(file) {
+    baseName = file.name.replace(/\.[^.]*$/, '') || 'cartridge';
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const bytes = new Uint8Array(reader.result);
+        subfiles = TapCart.parseTap(bytes);
+        if (!subfiles.length) {
+          showMsg('parseMsg', 'err', 'No TAP blocks found. Is this a valid .TAP file?');
+          hide('selectPanel', 'optsPanel', 'buildPanel');
+          return;
+        }
+        showMsg('parseMsg', 'ok',
+          'Loaded <b>' + esc(file.name) + '</b> — found ' + subfiles.length +
+          ' block' + (subfiles.length === 1 ? '' : 's') + '.');
+        renderSubfiles();
+      } catch (err) {
+        showMsg('parseMsg', 'err', 'Could not parse file: ' + esc(err.message));
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ---- Subfile table ----
+  function renderSubfiles() {
+    const body = $('subBody');
+    body.innerHTML = '';
+    let firstProgram = -1;
+    subfiles.forEach((s, i) => {
+      if (s.type === 0 && firstProgram < 0) firstProgram = i;
+      const tr = document.createElement('tr');
+      const isProg = s.type === 0;
+      const addr = '$' + (s.param1 & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+      tr.innerHTML =
+        '<td><input type="radio" name="prog" value="' + i + '"' + (isProg ? '' : ' disabled') + '></td>' +
+        '<td><input type="checkbox" class="incl" data-i="' + i + '"></td>' +
+        '<td>' + esc(s.name || '(unnamed)') + (s.autostart ? ' <span class="pill tag-auto">AUTO</span>' : '') + '</td>' +
+        '<td>' + esc(s.typeLabel) + '</td>' +
+        '<td class="num">' + s.length + '</td>' +
+        '<td class="num"><input type="text" class="addr-in" data-i="' + i + '" value="' + addr + '"></td>';
+      body.appendChild(tr);
+    });
+    // Default-select the first Program.
+    if (firstProgram >= 0) {
+      const r = body.querySelector('input[name=prog][value="' + firstProgram + '"]');
+      if (r) { r.checked = true; }
+    }
+    body.addEventListener('change', onSelectionChange);
+    show('selectPanel', 'optsPanel', 'buildPanel');
+    syncRows();
+    onSelectionChange();
+    $('outName').value = baseName;
+  }
+
+  function selectedProgramIndex() {
+    const r = document.querySelector('input[name=prog]:checked');
+    return r ? parseInt(r.value, 10) : -1;
+  }
+
+  function syncRows() {
+    // A row chosen as the program can't also be an "include" append.
+    const prog = selectedProgramIndex();
+    document.querySelectorAll('.incl').forEach((cb) => {
+      const i = parseInt(cb.dataset.i, 10);
+      const isProg = i === prog;
+      cb.disabled = isProg;
+      if (isProg) cb.checked = false;
+      cb.closest('tr').classList.toggle('disabled', isProg);
+    });
+  }
+
+  function onSelectionChange() {
+    syncRows();
+    const prog = selectedProgramIndex();
+    const auto = $('autostart');
+    const note = $('autoNote');
+    if (prog >= 0 && subfiles[prog].autostart) {
+      auto.checked = true; auto.disabled = true;
+      note.textContent = '(forced: program has a run line)';
+    } else {
+      auto.disabled = false;
+      note.textContent = '';
+    }
+  }
+
+  // ---- Parse a $hex or decimal number ----
+  function parseNum(s, label) {
+    s = String(s).trim().toLowerCase();
+    let v;
+    if (s[0] === '$') v = parseInt(s.slice(1), 16);
+    else if (s.startsWith('0x')) v = parseInt(s.slice(2), 16);
+    else v = parseInt(s, 10);
+    if (isNaN(v)) throw new Error('Invalid number for ' + label + ': "' + s + '"');
+    return v;
+  }
+
+  // ---- Build ----
+  $('buildBtn').addEventListener('click', build);
+
+  function build() {
+    clearMsg('buildMsg'); hide('result');
+    try {
+      const prog = selectedProgramIndex();
+      if (prog < 0) throw new Error('Select a BASIC program first.');
+
+      const appends = [];
+      document.querySelectorAll('.incl:checked').forEach((cb) => {
+        const i = parseInt(cb.dataset.i, 10);
+        const addrIn = document.querySelector('.addr-in[data-i="' + i + '"]');
+        const address = parseNum(addrIn.value, 'address of "' + subfiles[i].name + '"');
+        appends.push({ address: address, data: subfiles[i].data, _name: subfiles[i].name });
+      });
+
+      const out = TapCart.buildCartridge({
+        program: subfiles[prog].data,
+        basStart: parseNum($('basStart').value, 'BASIC start address'),
+        reserved: parseNum($('reserved').value, 'reserved bytes'),
+        autostart: $('autostart').checked || subfiles[prog].autostart,
+        appends: appends,
+      });
+
+      lastBuild = out;
+      const warnBig = out.contentLength > TapCart.MAX_CART
+        ? '<div class="msg warn">⚠ Content is ' + out.contentLength +
+          ' bytes — larger than the 32K (chunks 4–7) a DOCK cartridge can hold. ' +
+          'It may not work on real hardware.</div>'
+        : '';
+      $('summary').innerHTML =
+        'Program: <b>' + esc(subfiles[prog].name || '(unnamed)') + '</b> (' + subfiles[prog].length + ' bytes)<br>' +
+        (appends.length ? 'Appended: <b>' + appends.map(a => esc(a._name)).join(', ') + '</b><br>' : '') +
+        'Chunk map byte: <b>0x' + out.chunkMap.toString(16).toUpperCase() + '</b> · ' +
+        'chunks used: <b>' + out.chunksUsed + '</b><br>' +
+        '.BIN size: <b>' + out.bin.length + '</b> bytes · .DCK size: <b>' + out.dck.length + '</b> bytes';
+      $('buildMsg').innerHTML = warnBig;
+      show('result');
+      showMsg('buildMsg', 'ok', '✓ Cartridge built.' , true);
+    } catch (err) {
+      showMsg('buildMsg', 'err', esc(err.message));
+    }
+  }
+
+  $('dlBin').addEventListener('click', () => download(lastBuild.bin, ($('outName').value || baseName) + '.BIN'));
+  $('dlDck').addEventListener('click', () => download(lastBuild.dck, ($('outName').value || baseName) + '.DCK'));
+
+  function download(bytes, name) {
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ---- helpers ----
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+  function show() { for (const id of arguments) $(id).classList.remove('hidden'); }
+  function hide() { for (const id of arguments) $(id).classList.add('hidden'); }
+  function clearMsg(id) { $(id).innerHTML = ''; }
+  function showMsg(id, kind, html, append) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + kind; el.innerHTML = html;
+    if (append) $(id).appendChild(el); else $(id).innerHTML = '', $(id).appendChild(el);
+  }
+})();
+</script>
+</body>
+</html>

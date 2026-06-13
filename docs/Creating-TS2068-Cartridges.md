@@ -9,6 +9,12 @@ It is written for someone who has never made a cartridge before. If you only wan
 to *use* the tool, jump to [Using this tool](#using-this-tool). If you want to
 understand *why* it produces the bytes it does, read from the top.
 
+> **In a hurry?** There's a browser-based builder that does all of this with no
+> install — drag in a `.TAP`, pick what to include, and download the `.BIN`/`.DCK`:
+> **<https://timex-sinclair-projects.github.io/2068-TAP-To-Cart/>**
+> (source: [`index.html`](../index.html)). The rest of this guide explains what it
+> produces and why.
+
 > **Sources.** This guide synthesizes two period manuals, both scanned and freely
 > readable on the Internet Archive:
 > - Thomas B. Woods, *The 32K Non-Volatile RAM Owner's Manual* (1985–86) — the

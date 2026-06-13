@@ -40,7 +40,7 @@ def fileExistQ(filename):
 #
 def replaceExt(filename, extension):
     myFilename = ""
-    removeQuotes(filename)
+    filename = removeQuotes(filename)
     filenameLen = len(filename)
     if(filename[filenameLen - 4] == "."):
         myFilename = filename[:(filenameLen - 3)] + extension
@@ -67,7 +67,7 @@ def removeQuotes(fileName):
 #   characters of the file name.
 #
 def getFileExt(filename):
-    removeQuotes(filename)
+    filename = removeQuotes(filename)
     filenameLen = len(filename)
     fileExt = filename[(filenameLen - 3) : filenameLen]
     return fileExt.lower()

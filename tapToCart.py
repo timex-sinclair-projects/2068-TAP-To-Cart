@@ -1,7 +1,5 @@
 # main
 
-from pickle import FALSE
-
 import sys
 from utils import globals
 from utils.myFileRtns import fileExistQ

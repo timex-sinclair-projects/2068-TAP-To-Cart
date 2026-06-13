@@ -177,8 +177,8 @@ def makeArosChunkMap(datLen):
 #
 def getBinLoc(binFileName):
     sBinLoc = (binFileName.split(",", 1))
-    sLoc = sBinLoc[0]    
-    sLoc.strip()
+    sLoc = sBinLoc[0]
+    sLoc = sLoc.strip()
     return myStrToInt(sLoc)
 
 #--------------------------------------------------------------

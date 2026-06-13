@@ -1,6 +1,6 @@
 import sys
 import ntpath
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 
 from utils import globals
 
@@ -43,7 +43,7 @@ def myStrToInt(sNum):
 #
 def parseCmdFile():
 # activate the INI parser
-    parser = SafeConfigParser()
+    parser = ConfigParser()
     parser.read(globals.g_ctlFileName)
 
 #----------------------------------------------
